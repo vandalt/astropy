@@ -21,30 +21,6 @@ from . import core, fixedwidth
 __doctest_skip__ = ["*"]
 
 
-def _is_section_delimiter(line):
-    """Check if line is a section delimiter.
-
-    CDS/MRT tables use dashes or equal signs ("------" or "======") to
-    separate sections. This function checks if a line contains only either
-    of these characters.
-
-    Parameters
-    ----------
-    line : str
-        String containing an entire line from the table text file.
-
-    Returns
-    -------
-    status : bool
-        True if the line is a section delimiter, False otherwise.
-
-    """
-    # Check that line starts with either 6 "-" or "="
-    # and that it contains only a single repeated character.
-    # Latter condition fixes cases where a regular row starts with 6 "-".
-    return line.startswith(("------", "=======")) and len(set(line.strip())) == 1
-
-
 class CdsHeader(core.BaseHeader):
     _subfmt = "CDS"
 
@@ -91,7 +67,7 @@ class CdsHeader(core.BaseHeader):
                 line = line.strip()
                 if in_header:
                     lines.append(line)
-                    if _is_section_delimiter(line):
+                    if line.startswith(("------", "=======")):
                         comment_lines += 1
                         if comment_lines == 3:
                             break
@@ -141,7 +117,7 @@ class CdsHeader(core.BaseHeader):
 
         cols = []
         for line in itertools.islice(lines, i_col_def + 4, None):
-            if _is_section_delimiter(line):
+            if line.startswith(("------", "=======")):
                 break
             match = re_col_def.match(line)
             if match:
@@ -240,7 +216,9 @@ class CdsData(core.BaseData):
         # attribute.
         if self.header.readme and self.table_name:
             return lines
-        i_sections = [i for i, x in enumerate(lines) if _is_section_delimiter(x)]
+        i_sections = [
+            i for i, x in enumerate(lines) if x.startswith(("------", "======="))
+        ]
         if not i_sections:
             raise core.InconsistentTableError(
                 f"No {self._subfmt} section delimiter found"
