@@ -487,3 +487,20 @@ def test_annotated_not_unit():
     assert myfunc(1) == 1
     assert myfunc(1 * u.m) == 1 * u.m
     assert myfunc(1 * u.s) == 1 * u.s
+
+
+def test_union_with_type():
+    @u.quantity_input
+    def myfunc(x: u.Quantity["length"] | str):  # noqa: F821
+        return x
+
+    assert myfunc(1 * u.m) == 1 * u.m
+    assert myfunc("1m") == "1m"
+    with pytest.raises(
+        TypeError,
+        match=(
+            "Argument 'x' to function 'myfunc' has no 'unit' attribute. "
+            "You should pass in an astropy Quantity instead."
+        ),
+    ):
+        x = myfunc(5.0)

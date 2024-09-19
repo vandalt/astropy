@@ -40,7 +40,13 @@ def _get_allowed_units(targets):
 
 
 def _validate_arg_value(
-    param_name, func_name, arg, targets, equivalencies, strict_dimensionless=False
+    param_name,
+    func_name,
+    arg,
+    targets,
+    equivalencies,
+    strict_dimensionless=False,
+    type_targets=None,
 ):
     """
     Validates the object passed in to the wrapped function, ``arg``, with target
@@ -64,6 +70,15 @@ def _validate_arg_value(
         elif isinstance(arg, np.ndarray) and np.issubdtype(arg.dtype, np.number):
             return
 
+    # If non-quatity types are allowed and the arg matches one of them
+    #   allow it to pass through
+    if (
+        type_targets is not None
+        and not hasattr(arg, "unit")
+        and isinstance(arg, tuple(type_targets))
+    ):
+        return
+
     for allowed_unit in allowed_units:
         try:
             if arg.unit.is_equivalent(allowed_unit, equivalencies=equivalencies):
@@ -76,6 +91,7 @@ def _validate_arg_value(
                 error_msg = "no 'unit' attribute"
 
             raise TypeError(
+                # TODO: Update message with type_targets?
                 f"Argument '{param_name}' to function '{func_name}'"
                 f" has {error_msg}. You should pass in an astropy "
                 "Quantity instead."
@@ -116,15 +132,19 @@ def _parse_annotation(target):
     if origin is T.Union:
         return [_parse_annotation(t) for t in T.get_args(target)]
     elif origin is not T.Annotated:  # can't be Quantity[]
+        if isinstance(target, type):
+            return target
         return False
 
     # parse type hint
     cls, *annotations = T.get_args(target)
+    # TODO: fix this one as well
     if not issubclass(cls, Quantity) or not annotations:
         return False
 
     # get unit from type hint
     unit, *rest = annotations
+    # TODO: fix this one as well
     if not isinstance(unit, (UnitBase, PhysicalType)):
         return False
 
@@ -287,11 +307,14 @@ class QuantityInput:
                 #    are not strings or subclasses of Unit. This is to allow
                 #    non unit related annotations to pass through
                 if is_annotation:
+                    type_targets = [t for t in valid_targets if isinstance(t, type)]
                     valid_targets = [
                         t
                         for t in valid_targets
                         if isinstance(t, (str, UnitBase, PhysicalType))
                     ]
+                else:
+                    type_targets = None
 
                 # Now we loop over the allowed units/physical types and validate
                 #   the value of the argument:
@@ -302,6 +325,7 @@ class QuantityInput:
                     valid_targets,
                     self.equivalencies,
                     self.strict_dimensionless,
+                    type_targets=type_targets,
                 )
 
             if self.equivalencies:
